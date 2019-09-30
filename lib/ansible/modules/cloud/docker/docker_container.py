@@ -20,9 +20,20 @@ short_description: manage docker containers
 
 description:
   - Manage the life cycle of docker containers.
-  - Supports check mode. Run with --check and --diff to view config difference and list of actions to be taken.
+  - Supports check mode. Run with C(--check) and C(--diff) to view config difference and list of actions to be taken.
 
 version_added: "2.1"
+
+notes:
+  - For most config changes, the container needs to be recreated, i.e. the existing container has to be destroyed and
+    a new one created. This can cause unexpected data loss and downtime. You can use the I(comparisons) option to
+    prevent this.
+  - If the module needs to recreate the container, it will only use the options provided to the module to create the
+    new container (except I(image)). Therefore, always specify *all* options relevant to the container.
+  - When I(restart) is set to C(true), the module will only restart the container if no config changes are detected.
+    Please note that several options have default values; if the container to be restarted uses different values for
+    these options, it will be recreated instead. The options with default values which can cause this are I(auto_remove),
+    I(detach), I(init), I(interactive), I(memory), I(paused), I(privileged), I(read_only) and I(tty).
 
 options:
   auto_remove:
@@ -2186,7 +2197,8 @@ class Container(DockerBaseClass):
 
         connected_networks = self.container['NetworkSettings']['Networks']
         for network in self.parameters.networks:
-            if connected_networks.get(network['name'], None) is None:
+            network_info = connected_networks.get(network['name'])
+            if network_info is None:
                 different = True
                 differences.append(dict(
                     parameter=network,
@@ -2194,18 +2206,19 @@ class Container(DockerBaseClass):
                 ))
             else:
                 diff = False
-                if network.get('ipv4_address') and network['ipv4_address'] != connected_networks[network['name']].get('IPAddress'):
+                network_info_ipam = network_info.get('IPAMConfig', {})
+                if network.get('ipv4_address') and network['ipv4_address'] != network_info_ipam.get('IPv4Address'):
                     diff = True
-                if network.get('ipv6_address') and network['ipv6_address'] != connected_networks[network['name']].get('GlobalIPv6Address'):
+                if network.get('ipv6_address') and network['ipv6_address'] != network_info_ipam.get('IPv6Address'):
                     diff = True
                 if network.get('aliases'):
-                    if not compare_generic(network['aliases'], connected_networks[network['name']].get('Aliases'), 'allow_more_present', 'set'):
+                    if not compare_generic(network['aliases'], network_info.get('Aliases'), 'allow_more_present', 'set'):
                         diff = True
                 if network.get('links'):
                     expected_links = []
                     for link, alias in network['links']:
                         expected_links.append("%s:%s" % (link, alias))
-                    if not compare_generic(expected_links, connected_networks[network['name']].get('Links'), 'allow_more_present', 'set'):
+                    if not compare_generic(expected_links, network_info.get('Links'), 'allow_more_present', 'set'):
                         diff = True
                 if diff:
                     different = True
@@ -2213,10 +2226,10 @@ class Container(DockerBaseClass):
                         parameter=network,
                         container=dict(
                             name=network['name'],
-                            ipv4_address=connected_networks[network['name']].get('IPAddress'),
-                            ipv6_address=connected_networks[network['name']].get('GlobalIPv6Address'),
-                            aliases=connected_networks[network['name']].get('Aliases'),
-                            links=connected_networks[network['name']].get('Links')
+                            ipv4_address=network_info_ipam.get('IPv4Address'),
+                            ipv6_address=network_info_ipam.get('IPv6Address'),
+                            aliases=network_info.get('Aliases'),
+                            links=network_info.get('Links')
                         )
                     ))
         return different, differences
@@ -3081,7 +3094,8 @@ class AnsibleDockerClientContainer(AnsibleDockerClient):
             pids_limit=dict(docker_py_version='1.10.0', docker_api_version='1.23'),
             mounts=dict(docker_py_version='2.6.0', docker_api_version='1.25'),
             # specials
-            ipvX_address_supported=dict(docker_py_version='1.9.0', detect_usage=detect_ipvX_address_usage,
+            ipvX_address_supported=dict(docker_py_version='1.9.0', docker_api_version='1.22',
+                                        detect_usage=detect_ipvX_address_usage,
                                         usage_msg='ipv4_address or ipv6_address in networks'),
             stop_timeout=dict(),  # see _get_additional_minimal_versions()
         )

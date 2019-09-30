@@ -28,7 +28,7 @@ options:
             - ID of the Virtual Machine to manage.
     state:
         description:
-            - Should the Virtual Machine be running/stopped/present/absent/suspended/next_run/registered/exported.
+            - Should the Virtual Machine be running/stopped/present/absent/suspended/next_run/registered/exported/reboot.
               When C(state) is I(registered) and the unregistered VM's name
               belongs to an already registered in engine VM in the same DC
               then we fail to register the unregistered template.
@@ -38,7 +38,8 @@ options:
             - Please check I(notes) to more detailed description of states.
             - I(exported) state will export the VM to export domain or as OVA.
             - I(registered) is supported since 2.4.
-        choices: [ absent, next_run, present, registered, running, stopped, suspended, exported ]
+            - I(reboot) is supported since 2.10, virtual machine is rebooted only if it's in up state.
+        choices: [ absent, next_run, present, registered, running, stopped, suspended, exported, reboot ]
         default: present
     cluster:
         description:
@@ -835,6 +836,10 @@ options:
             - "VM should have snapshot specified by C(snapshot)."
             - "If C(snapshot_name) specified C(snapshot_vm) is required."
         version_added: "2.9"
+    custom_emulated_machine:
+        description:
+            - "Sets the value of the custom_emulated_machine attribute."
+        version_added: "2.10"
 
 notes:
     - If VM is in I(UNASSIGNED) or I(UNKNOWN) state before any operation, the module will fail.
@@ -1374,6 +1379,7 @@ class VmsModule(BaseModule):
             use_latest_template_version=self.param('use_latest_template_version'),
             stateless=self.param('stateless') or self.param('use_latest_template_version'),
             delete_protected=self.param('delete_protected'),
+            custom_emulated_machine=self.param('custom_emulated_machine'),
             bios=(
                 otypes.Bios(boot_menu=otypes.BootMenu(enabled=self.param('boot_menu')))
             ) if self.param('boot_menu') is not None else None,
@@ -1585,6 +1591,7 @@ class VmsModule(BaseModule):
             equal(self.param('stateless'), entity.stateless) and
             equal(self.param('cpu_shares'), entity.cpu_shares) and
             equal(self.param('delete_protected'), entity.delete_protected) and
+            equal(self.param('custom_emulated_machine'), entity.custom_emulated_machine) and
             equal(self.param('use_latest_template_version'), entity.use_latest_template_version) and
             equal(self.param('boot_devices'), [str(dev) for dev in getattr(entity.os.boot, 'devices', [])]) and
             equal(self.param('instance_type'), get_link_name(self._connection, entity.instance_type), ignore_case=True) and
@@ -2309,7 +2316,9 @@ def control_state(vm, vms_service, module):
 
 def main():
     argument_spec = ovirt_full_argument_spec(
-        state=dict(type='str', default='present', choices=['absent', 'next_run', 'present', 'registered', 'running', 'stopped', 'suspended', 'exported']),
+        state=dict(type='str', default='present', choices=[
+            'absent', 'next_run', 'present', 'registered', 'running', 'stopped', 'suspended', 'exported', 'reboot'
+        ]),
         name=dict(type='str'),
         id=dict(type='str'),
         cluster=dict(type='str'),
@@ -2349,6 +2358,7 @@ def main():
         lease=dict(type='str'),
         stateless=dict(type='bool'),
         delete_protected=dict(type='bool'),
+        custom_emulated_machine=dict(type='str'),
         force=dict(type='bool', default=False),
         nics=dict(type='list', default=[]),
         cloud_init=dict(type='dict'),
@@ -2633,6 +2643,13 @@ def main():
                     directory=export_vm.get('directory'),
                     filename=export_vm.get('filename'),
                 )
+        elif state == 'reboot':
+            ret = vms_module.action(
+                action='reboot',
+                entity=vm,
+                action_condition=lambda vm: vm.status == otypes.VmStatus.UP,
+                wait_condition=lambda vm: vm.status == otypes.VmStatus.UP,
+            )
 
         module.exit_json(**ret)
     except Exception as e:
