@@ -122,7 +122,7 @@ hcloud_volume:
             sample: 12345
         name:
             description: Name of the volume
-            type: string
+            type: str
             returned: Always
             sample: my-volume
         size:
@@ -130,9 +130,15 @@ hcloud_volume:
             type: int
             returned: Always
             sample: 1337
+        linux_device:
+            description: Path to the device that contains the volume.
+            returned: always
+            type: str
+            sample: /dev/disk/by-id/scsi-0HC_Volume_12345
+            version_added: "2.10"
         location:
             description: Location name where the volume is located at
-            type: string
+            type: str
             returned: Always
             sample: "fsn1"
         labels:
@@ -144,7 +150,7 @@ hcloud_volume:
                 mylabel: 123
         server:
             description: Server name where the volume is attached to
-            type: string
+            type: str
             returned: Always
             sample: "my-server"
 """
@@ -178,6 +184,7 @@ class AnsibleHcloudVolume(Hcloud):
             "location": to_native(self.hcloud_volume.location.name),
             "labels": self.hcloud_volume.labels,
             "server": to_native(server_name),
+            "linux_device": to_native(self.hcloud_volume.linux_device),
         }
 
     def _get_volume(self):
