@@ -2,6 +2,9 @@
 # Copyright: Ansible Project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
 
 ANSIBLE_METADATA = {'status': ['preview'],
                     'supported_by': 'community',
@@ -24,10 +27,13 @@ options:
       - A dict of filters to apply. Each dict item consists of a filter key and a filter value.
         See U(https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeVpnConnections.html) for possible filters.
     required: false
+    type: dict
   vpn_connection_ids:
     description:
       - Get details of a specific VPN connections using vpn connection ID/IDs. This value should be provided as a list.
     required: false
+    type: list
+    elements: str
 extends_documentation_fragment:
     - aws
     - ec2
@@ -123,7 +129,7 @@ vpn_connections:
            last_status_change:
                description: The date and time of the last change in status.
                returned: always
-               type: datetime
+               type: str
                sample: "2018-02-09T14:35:27+00:00"
            outside_ip_address:
                description: The Internet-routable IP address of the virtual private gateway's outside interface.
@@ -140,6 +146,11 @@ vpn_connections:
                returned: always
                type: str
                sample: IPSEC IS DOWN
+           certificate_arn:
+               description: The Amazon Resource Name of the virtual private gateway tunnel endpoint certificate.
+               returned: when a private certificate is used for authentication
+               type: str
+               sample: "arn:aws:acm:us-east-1:123456789101:certificate/c544d8ce-20b8-4fff-98b0-example"
       vpn_connection_id:
         description: The ID of the VPN connection.
         returned: always

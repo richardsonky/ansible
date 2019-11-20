@@ -57,6 +57,8 @@ def get_test_galaxy_api(url, version, token_ins=None, token_value=None):
     token_value = token_value or "my token"
     token_ins = token_ins or GalaxyToken(token_value)
     api = GalaxyAPI(None, "test", url)
+    # Warning, this doesn't test g_connect() because _availabe_api_versions is set here.  That means
+    # that urls for v2 servers have to append '/api/' themselves in the input data.
     api._available_api_versions = {version: '%s' % version}
     api.token = token_ins
 
@@ -332,13 +334,16 @@ def test_publish_failure(api_version, collection_url, response, expected, collec
         api.publish_collection(collection_artifact)
 
 
-@pytest.mark.parametrize('api_version, token_type, token_ins', [
-    ('v2', 'Token', GalaxyToken('my token')),
-    ('v3', 'Bearer', KeycloakToken(auth_url='https://api.test/')),
+@pytest.mark.parametrize('server_url, api_version, token_type, token_ins, import_uri, full_import_uri', [
+    ('https://galaxy.server.com/api', 'v2', 'Token', GalaxyToken('my token'),
+     '1234',
+     'https://galaxy.server.com/api/v2/collection-imports/1234'),
+    ('https://galaxy.server.com/api/automation-hub/', 'v3', 'Bearer', KeycloakToken(auth_url='https://api.test/'),
+     '1234',
+     'https://galaxy.server.com/api/automation-hub/v3/imports/collections/1234/'),
 ])
-def test_wait_import_task(api_version, token_type, token_ins, monkeypatch):
-    api = get_test_galaxy_api('https://galaxy.server.com/api/', api_version, token_ins=token_ins)
-    import_uri = 'https://galaxy.server.com/api/%s/task/1234' % api_version
+def test_wait_import_task(server_url, api_version, token_type, token_ins, import_uri, full_import_uri, monkeypatch):
+    api = get_test_galaxy_api(server_url, api_version, token_ins=token_ins)
 
     if token_ins:
         mock_token_get = MagicMock()
@@ -355,20 +360,23 @@ def test_wait_import_task(api_version, token_type, token_ins, monkeypatch):
     api.wait_import_task(import_uri)
 
     assert mock_open.call_count == 1
-    assert mock_open.mock_calls[0][1][0] == import_uri
+    assert mock_open.mock_calls[0][1][0] == full_import_uri
     assert mock_open.mock_calls[0][2]['headers']['Authorization'] == '%s my token' % token_type
 
     assert mock_display.call_count == 1
-    assert mock_display.mock_calls[0][1][0] == 'Waiting until Galaxy import task %s has completed' % import_uri
+    assert mock_display.mock_calls[0][1][0] == 'Waiting until Galaxy import task %s has completed' % full_import_uri
 
 
-@pytest.mark.parametrize('api_version, token_type, token_ins', [
-    ('v2', 'Token', GalaxyToken('my token')),
-    ('v3', 'Bearer', KeycloakToken(auth_url='https://api.test/')),
+@pytest.mark.parametrize('server_url, api_version, token_type, token_ins, import_uri, full_import_uri', [
+    ('https://galaxy.server.com/api/', 'v2', 'Token', GalaxyToken('my token'),
+     '1234',
+     'https://galaxy.server.com/api/v2/collection-imports/1234'),
+    ('https://galaxy.server.com/api/automation-hub', 'v3', 'Bearer', KeycloakToken(auth_url='https://api.test/'),
+     '1234',
+     'https://galaxy.server.com/api/automation-hub/v3/imports/collections/1234/'),
 ])
-def test_wait_import_task_multiple_requests(api_version, token_type, token_ins, monkeypatch):
-    api = get_test_galaxy_api('https://galaxy.server.com/api/', api_version, token_ins=token_ins)
-    import_uri = 'https://galaxy.server.com/api/%s/task/1234' % api_version
+def test_wait_import_task_multiple_requests(server_url, api_version, token_type, token_ins, import_uri, full_import_uri, monkeypatch):
+    api = get_test_galaxy_api(server_url, api_version, token_ins=token_ins)
 
     if token_ins:
         mock_token_get = MagicMock()
@@ -393,26 +401,29 @@ def test_wait_import_task_multiple_requests(api_version, token_type, token_ins, 
     api.wait_import_task(import_uri)
 
     assert mock_open.call_count == 2
-    assert mock_open.mock_calls[0][1][0] == import_uri
+    assert mock_open.mock_calls[0][1][0] == full_import_uri
     assert mock_open.mock_calls[0][2]['headers']['Authorization'] == '%s my token' % token_type
-    assert mock_open.mock_calls[1][1][0] == import_uri
+    assert mock_open.mock_calls[1][1][0] == full_import_uri
     assert mock_open.mock_calls[1][2]['headers']['Authorization'] == '%s my token' % token_type
 
     assert mock_display.call_count == 1
-    assert mock_display.mock_calls[0][1][0] == 'Waiting until Galaxy import task %s has completed' % import_uri
+    assert mock_display.mock_calls[0][1][0] == 'Waiting until Galaxy import task %s has completed' % full_import_uri
 
     assert mock_vvv.call_count == 1
     assert mock_vvv.mock_calls[0][1][0] == \
         'Galaxy import process has a status of test, wait 2 seconds before trying again'
 
 
-@pytest.mark.parametrize('api_version, token_type, token_ins', [
-    ('v2', 'Token', GalaxyToken('my token')),
-    ('v3', 'Bearer', KeycloakToken(auth_url='https://api.test/')),
+@pytest.mark.parametrize('server_url, api_version, token_type, token_ins, import_uri, full_import_uri,', [
+    ('https://galaxy.server.com/api/', 'v2', 'Token', GalaxyToken('my token'),
+     '1234',
+     'https://galaxy.server.com/api/v2/collection-imports/1234'),
+    ('https://galaxy.server.com/api/automation-hub/', 'v3', 'Bearer', KeycloakToken(auth_url='https://api.test/'),
+     '1234',
+     'https://galaxy.server.com/api/automation-hub/v3/imports/collections/1234/'),
 ])
-def test_wait_import_task_with_failure(api_version, token_type, token_ins, monkeypatch):
-    api = get_test_galaxy_api('https://galaxy.server.com/api/', api_version, token_ins=token_ins)
-    import_uri = 'https://galaxy.server.com/api/%s/task/1234' % api_version
+def test_wait_import_task_with_failure(server_url, api_version, token_type, token_ins, import_uri, full_import_uri, monkeypatch):
+    api = get_test_galaxy_api(server_url, api_version, token_ins=token_ins)
 
     if token_ins:
         mock_token_get = MagicMock()
@@ -464,11 +475,11 @@ def test_wait_import_task_with_failure(api_version, token_type, token_ins, monke
         api.wait_import_task(import_uri)
 
     assert mock_open.call_count == 1
-    assert mock_open.mock_calls[0][1][0] == import_uri
+    assert mock_open.mock_calls[0][1][0] == full_import_uri
     assert mock_open.mock_calls[0][2]['headers']['Authorization'] == '%s my token' % token_type
 
     assert mock_display.call_count == 1
-    assert mock_display.mock_calls[0][1][0] == 'Waiting until Galaxy import task %s has completed' % import_uri
+    assert mock_display.mock_calls[0][1][0] == 'Waiting until Galaxy import task %s has completed' % full_import_uri
 
     assert mock_vvv.call_count == 1
     assert mock_vvv.mock_calls[0][1][0] == u'Galaxy import message: info - Somé info'
@@ -480,13 +491,16 @@ def test_wait_import_task_with_failure(api_version, token_type, token_ins, monke
     assert mock_err.mock_calls[0][1][0] == u'Galaxy import error message: Somé error'
 
 
-@pytest.mark.parametrize('api_version, token_type, token_ins', [
-    ('v2', 'Token', GalaxyToken('my_token')),
-    ('v3', 'Bearer', KeycloakToken(auth_url='https://api.test/')),
+@pytest.mark.parametrize('server_url, api_version, token_type, token_ins, import_uri, full_import_uri', [
+    ('https://galaxy.server.com/api/', 'v2', 'Token', GalaxyToken('my_token'),
+     '1234',
+     'https://galaxy.server.com/api/v2/collection-imports/1234'),
+    ('https://galaxy.server.com/api/automation-hub/', 'v3', 'Bearer', KeycloakToken(auth_url='https://api.test/'),
+     '1234',
+     'https://galaxy.server.com/api/automation-hub/v3/imports/collections/1234/'),
 ])
-def test_wait_import_task_with_failure_no_error(api_version, token_type, token_ins, monkeypatch):
-    api = get_test_galaxy_api('https://galaxy.server.com/api/', api_version, token_ins=token_ins)
-    import_uri = 'https://galaxy.server.com/api/%s/task/1234' % api_version
+def test_wait_import_task_with_failure_no_error(server_url, api_version, token_type, token_ins, import_uri, full_import_uri, monkeypatch):
+    api = get_test_galaxy_api(server_url, api_version, token_ins=token_ins)
 
     if token_ins:
         mock_token_get = MagicMock()
@@ -529,16 +543,16 @@ def test_wait_import_task_with_failure_no_error(api_version, token_type, token_i
     mock_err = MagicMock()
     monkeypatch.setattr(Display, 'error', mock_err)
 
-    expected = 'Galaxy import process failed: Unknown error, see %s for more details (Code: UNKNOWN)' % import_uri
-    with pytest.raises(AnsibleError, match=re.escape(expected)):
+    expected = 'Galaxy import process failed: Unknown error, see %s for more details \\(Code: UNKNOWN\\)' % full_import_uri
+    with pytest.raises(AnsibleError, match=expected):
         api.wait_import_task(import_uri)
 
     assert mock_open.call_count == 1
-    assert mock_open.mock_calls[0][1][0] == import_uri
+    assert mock_open.mock_calls[0][1][0] == full_import_uri
     assert mock_open.mock_calls[0][2]['headers']['Authorization'] == '%s my token' % token_type
 
     assert mock_display.call_count == 1
-    assert mock_display.mock_calls[0][1][0] == 'Waiting until Galaxy import task %s has completed' % import_uri
+    assert mock_display.mock_calls[0][1][0] == 'Waiting until Galaxy import task %s has completed' % full_import_uri
 
     assert mock_vvv.call_count == 1
     assert mock_vvv.mock_calls[0][1][0] == u'Galaxy import message: info - Somé info'
@@ -550,13 +564,16 @@ def test_wait_import_task_with_failure_no_error(api_version, token_type, token_i
     assert mock_err.mock_calls[0][1][0] == u'Galaxy import error message: Somé error'
 
 
-@pytest.mark.parametrize('api_version, token_type, token_ins', [
-    ('v2', 'Token', GalaxyToken('my token')),
-    ('v3', 'Bearer', KeycloakToken(auth_url='https://api.test/')),
+@pytest.mark.parametrize('server_url, api_version, token_type, token_ins, import_uri, full_import_uri', [
+    ('https://galaxy.server.com/api', 'v2', 'Token', GalaxyToken('my token'),
+     '1234',
+     'https://galaxy.server.com/api/v2/collection-imports/1234'),
+    ('https://galaxy.server.com/api/automation-hub', 'v3', 'Bearer', KeycloakToken(auth_url='https://api.test/'),
+     '1234',
+     'https://galaxy.server.com/api/automation-hub/v3/imports/collections/1234/'),
 ])
-def test_wait_import_task_timeout(api_version, token_type, token_ins, monkeypatch):
-    api = get_test_galaxy_api('https://galaxy.server.com/api/', api_version, token_ins=token_ins)
-    import_uri = 'https://galaxy.server.com/api/%s/task/1234' % api_version
+def test_wait_import_task_timeout(server_url, api_version, token_type, token_ins, import_uri, full_import_uri, monkeypatch):
+    api = get_test_galaxy_api(server_url, api_version, token_ins=token_ins)
 
     if token_ins:
         mock_token_get = MagicMock()
@@ -578,18 +595,18 @@ def test_wait_import_task_timeout(api_version, token_type, token_ins, monkeypatc
 
     monkeypatch.setattr(time, 'sleep', MagicMock())
 
-    expected = "Timeout while waiting for the Galaxy import process to finish, check progress at '%s'" % import_uri
+    expected = "Timeout while waiting for the Galaxy import process to finish, check progress at '%s'" % full_import_uri
     with pytest.raises(AnsibleError, match=expected):
         api.wait_import_task(import_uri, 1)
 
     assert mock_open.call_count > 1
-    assert mock_open.mock_calls[0][1][0] == import_uri
+    assert mock_open.mock_calls[0][1][0] == full_import_uri
     assert mock_open.mock_calls[0][2]['headers']['Authorization'] == '%s my token' % token_type
-    assert mock_open.mock_calls[1][1][0] == import_uri
+    assert mock_open.mock_calls[1][1][0] == full_import_uri
     assert mock_open.mock_calls[1][2]['headers']['Authorization'] == '%s my token' % token_type
 
     assert mock_display.call_count == 1
-    assert mock_display.mock_calls[0][1][0] == 'Waiting until Galaxy import task %s has completed' % import_uri
+    assert mock_display.mock_calls[0][1][0] == 'Waiting until Galaxy import task %s has completed' % full_import_uri
 
     # expected_wait_msg = 'Galaxy import process has a status of waiting, wait {0} seconds before trying again'
     assert mock_vvv.call_count > 9  # 1st is opening Galaxy token file.
@@ -843,3 +860,50 @@ def test_get_collection_versions_pagination(api_version, token_type, token_ins, 
         assert mock_open.mock_calls[0][2]['headers']['Authorization'] == '%s my token' % token_type
         assert mock_open.mock_calls[1][2]['headers']['Authorization'] == '%s my token' % token_type
         assert mock_open.mock_calls[2][2]['headers']['Authorization'] == '%s my token' % token_type
+
+
+@pytest.mark.parametrize('responses', [
+    [
+        {
+            'count': 2,
+            'results': [{'name': '3.5.1', }, {'name': '3.5.2'}],
+            'next_link': None,
+            'next': None,
+            'previous_link': None,
+            'previous': None
+        },
+    ],
+    [
+        {
+            'count': 2,
+            'results': [{'name': '3.5.1'}],
+            'next_link': '/api/v1/roles/432/versions/?page=2&page_size=50',
+            'next': '/roles/432/versions/?page=2&page_size=50',
+            'previous_link': None,
+            'previous': None
+        },
+        {
+            'count': 2,
+            'results': [{'name': '3.5.2'}],
+            'next_link': None,
+            'next': None,
+            'previous_link': '/api/v1/roles/432/versions/?&page_size=50',
+            'previous': '/roles/432/versions/?page_size=50',
+        },
+    ]
+])
+def test_get_role_versions_pagination(monkeypatch, responses):
+    api = get_test_galaxy_api('https://galaxy.com/api/', 'v1')
+
+    mock_open = MagicMock()
+    mock_open.side_effect = [StringIO(to_text(json.dumps(r))) for r in responses]
+    monkeypatch.setattr(galaxy_api, 'open_url', mock_open)
+
+    actual = api.fetch_role_related('versions', 432)
+    assert actual == [{'name': '3.5.1'}, {'name': '3.5.2'}]
+
+    assert mock_open.call_count == len(responses)
+
+    assert mock_open.mock_calls[0][1][0] == 'https://galaxy.com/api/v1/roles/432/versions/?page_size=50'
+    if len(responses) == 2:
+        assert mock_open.mock_calls[1][1][0] == 'https://galaxy.com/api/v1/roles/432/versions/?page=2&page_size=50'

@@ -44,7 +44,7 @@ class GalaxyCLI(CLI):
 
     def __init__(self, args):
         # Inject role into sys.argv[1] as a backwards compatibility step
-        if len(args) > 1 and args[1] not in ['-h', '--help'] and 'role' not in args and 'collection' not in args:
+        if len(args) > 1 and args[1] not in ['-h', '--help', '--version'] and 'role' not in args and 'collection' not in args:
             # TODO: Should we add a warning here and eventually deprecate the implicit role subcommand choice
             # Remove this in Ansible 2.13 when we also remove -v as an option on the root parser for ansible-galaxy.
             idx = 2 if args[1].startswith('-v') else 1
@@ -651,6 +651,7 @@ class GalaxyCLI(CLI):
                 documentation='http://docs.example.com',
                 homepage='http://example.com',
                 issues='http://example.com/issue/tracker',
+                build_ignore=[],
             ))
 
             obj_path = os.path.join(init_path, namespace, collection_name)
